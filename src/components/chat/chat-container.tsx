@@ -1,84 +1,111 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { ChatHeader } from "./chat-header";
 import { ChatMessages } from "./chat-messages";
 import { ChatList } from "./chat-list";
-import { PresenceProvider } from "@/components/providers/presence-provider";
-
-interface User {
-  id: string;
-  name: string;
-}
+import { Button } from "@/components/ui/button";
+import { Users } from "lucide-react";
+import { usePresence } from "@/components/providers/presence-provider";
+import { useSession } from "next-auth/react";
+import { Search } from "./search";
+import { CreateGroupDialog } from "./create-group-dialog";
+import { cn } from "@/lib/utils";
+// import { Search } from "../search";
+// import { CreateGroupDialog } from "../modals/create-group-dialog";
 
 interface ChatContainerProps {
-  chatId: string;
-  otherUser: User;
+  chatId?: string;
+  otherUser?: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  };
 }
 
-export function ChatContainer({ chatId, otherUser }: ChatContainerProps) {
-  const [selectedChatId, setSelectedChatId] = useState<string>("");
-  const [showRightSidebar, setShowRightSidebar] = useState(true);
+export function ChatContainer({ chatId: initialChatId, otherUser: initialOtherUser }: ChatContainerProps) {
+  const { onlineUsers } = usePresence();
+  const [selectedChatId, setSelectedChatId] = useState<string | undefined>(initialChatId);
+  const [currentOtherUser, setCurrentOtherUser] = useState(initialOtherUser);
+  const [showLeftSidebar, setShowLeftSidebar] = useState(true);
+  const { data: session } = useSession();
+
+  useEffect(() => {
+    if (selectedChatId) {
+      fetch(`/api/chat/${selectedChatId}/info`)
+        .then(res => {
+          if (!res.ok) throw new Error('Failed to fetch chat info');
+          return res.json();
+        })
+        .then(data => {
+          if (!data.isGroup) {
+            const otherParticipant = data.participants.find(
+              (p: any) => p.id !== session?.user?.id
+            );
+            if (otherParticipant) {
+              setCurrentOtherUser({
+                id: otherParticipant.id,
+                name: otherParticipant.name,
+                image: otherParticipant.image
+              });
+            }
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching chat info:', error);
+        });
+    }
+  }, [selectedChatId, session?.user?.id]);
 
   return (
-    <PresenceProvider>
-      {(onlineUsers) => (
-        <div className="flex h-[calc(100vh-4rem)] bg-background justify-center">
-          <div className="flex w-full max-w-7xl mx-auto">
-            {/* Left Sidebar - Chat List */}
-            <motion.div 
-              initial={{ width: 380 }}
-              animate={{ width: 380 }}
-              className="flex flex-col border-r bg-card"
+    <div className="flex h-[calc(100vh-4rem)] bg-background">
+      <motion.div 
+        initial={{ width: 380 }}
+        animate={{ width: showLeftSidebar ? 380 : 0 }}
+        className={cn(
+          "flex flex-col border-r bg-card overflow-hidden",
+          !showLeftSidebar && "w-0"
+        )}
+      >
+        <div className="p-4 space-y-4">
+          <Search />
+          <div className="grid grid-cols-2 gap-2">
+            <CreateGroupDialog />
+            <Button 
+              variant="outline" 
+              className="w-full flex items-center gap-2"
+              onClick={() => setShowLeftSidebar(!showLeftSidebar)}
             >
-              <ChatList onSelectChat={setSelectedChatId} />
-            </motion.div>
-
-            {/* Main Chat Area */}
-            <motion.div 
-              className="flex-1 flex flex-col bg-background min-w-[500px]"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              <ChatHeader chatId={chatId} onlineUsers={onlineUsers} otherUser={otherUser} />
-              <AnimatePresence mode="wait">
-                {selectedChatId ? (
-                  <motion.div 
-                    key={selectedChatId}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    className="h-full"
-                  >
-                    <ChatMessages chatId={selectedChatId} onlineUsers={onlineUsers} otherUser={otherUser} />
-                  </motion.div>
-                ) : (
-                  <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex flex-col items-center justify-center h-full text-muted-foreground"
-                  >
-                    <h3 className="text-xl font-semibold mb-2">Select a conversation or start a new one</h3>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-
-            {/* Right Sidebar - Currently Watching */}
-            {showRightSidebar && (
-              <motion.div
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: 380, opacity: 1 }}
-                exit={{ width: 0, opacity: 0 }}
-                className="border-l bg-card"
-              >
-                {/* Currently Watching Component Here */}
-              </motion.div>
-            )}
+              <Users className="h-4 w-4" />
+              <span>Watch Together</span>
+            </Button>
           </div>
         </div>
-      )}
-    </PresenceProvider>
+        <ChatList onSelectChat={setSelectedChatId} />
+      </motion.div>
+
+      {/* Main Chat Area */}
+      <motion.div
+        initial={{ width: "calc(100% - 380px)" }}
+        animate={{ width: showLeftSidebar ? "calc(100% - 380px)" : "100%" }}
+        className="h-full flex flex-col"
+      >
+        {selectedChatId && currentOtherUser && (
+          <>
+            <ChatHeader 
+              otherUser={currentOtherUser}
+              onlineUsers={onlineUsers}
+              onToggleSidebar={() => setShowLeftSidebar(!showLeftSidebar)}
+            />
+            <ChatMessages 
+              chatId={selectedChatId}
+              otherUser={currentOtherUser}
+              onlineUsers={onlineUsers}
+            />
+          </>
+        )}
+      </motion.div>
+    </div>
   );
 } 

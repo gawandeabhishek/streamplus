@@ -1,214 +1,99 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Video, MoreVertical, Bell, BellOff, UserX, LogOut, Info, Users, UserPlus } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/components/ui/use-toast";
-import { useRouter } from "next/navigation";
-
-interface User {
-  id: string;
-  name: string;
-}
-
-interface ChatInfo {
-  name: string;
-  memberCount: number;
-  isGroup: boolean;
-  onlineStatus?: boolean;
-}
 
 interface ChatHeaderProps {
-  chatId: string;
-  onlineUsers: string[];
-  otherUser: User;
+  otherUser: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  };
+  onlineUsers: { user_id: string; email: string; }[];
+  onToggleSidebar: () => void;
+  onBack?: () => void;
+  isSidebarOpen?: boolean;
+  isLoading?: boolean;
 }
 
-export function ChatHeader({ chatId, onlineUsers, otherUser }: ChatHeaderProps) {
-  const [chatInfo, setChatInfo] = useState<ChatInfo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isMuted, setIsMuted] = useState(false);
-  const { toast } = useToast();
-  const router = useRouter();
+export function ChatHeader({ 
+  otherUser, 
+  onlineUsers, 
+  onToggleSidebar, 
+  onBack,
+  isSidebarOpen = true,
+  isLoading = false
+}: ChatHeaderProps) {
+  const [isMobile, setIsMobile] = useState(false);
+  const isOnline = onlineUsers?.some(user => user.user_id === otherUser?.id);
 
   useEffect(() => {
-    fetchChatInfo();
-  }, [chatId]);
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
-  const fetchChatInfo = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/chats/${chatId}/info`);
-      if (response.ok) {
-        const data = await response.json();
-        setChatInfo(data);
-      }
-    } catch (error) {
-      console.error("Error fetching chat info:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleMuteToggle = async () => {
-    try {
-      const response = await fetch(`/api/chats/${chatId}/mute`, {
-        method: 'POST',
-        body: JSON.stringify({ muted: !isMuted })
-      });
-      
-      if (response.ok) {
-        setIsMuted(!isMuted);
-        toast({
-          description: isMuted ? "Chat notifications turned on" : "Chat notifications muted",
-        });
-      }
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        description: "Failed to update notification settings",
-      });
-    }
-  };
-
-  const handleBlockUser = async () => {
-    try {
-      const response = await fetch(`/api/chats/${chatId}/block`, {
-        method: 'POST'
-      });
-      
-      if (response.ok) {
-        toast({
-          description: "User blocked successfully. You won't receive their messages.",
-        });
-        router.push('/chat'); // Redirect to chat list
-      }
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        description: "Failed to block user",
-      });
-    }
-  };
-
-  const handleLeaveGroup = async () => {
-    try {
-      const response = await fetch(`/api/chats/${chatId}/leave`, {
-        method: 'POST'
-      });
-      
-      if (response.ok) {
-        toast({
-          description: "You've left the group successfully",
-        });
-        router.push('/chat');
-      }
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        description: "Failed to leave group",
-      });
-    }
-  };
-
-  const handleAddMembers = async () => {
-    router.push(`/chat/${chatId}/add-members`);
-  };
+  if (isLoading) {
+    return (
+      <div className="sticky top-0 z-10">
+        <div className={cn(
+          "h-16 px-4 flex items-center gap-3",
+          "backdrop-blur-md bg-background/80 border-b",
+          "supports-[backdrop-filter]:bg-background/60"
+        )}>
+          <Skeleton className="h-10 w-10 rounded-full" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-[100px]" />
+            <Skeleton className="h-3 w-[60px]" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="border-b p-4 flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        {loading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-5 w-[200px]" />
-            <Skeleton className="h-4 w-[100px]" />
-          </div>
-        ) : (
-          <div>
-            <h2 className="font-semibold">{chatInfo?.name}</h2>
-            {chatInfo?.isGroup ? (
-  chatInfo.memberCount > 0 && (
-    <p className="text-sm text-muted-foreground">
-      {chatInfo.memberCount} members
-    </p>
-  )
-) : (
-  otherUser?.id && onlineUsers?.includes(otherUser.id) && (
-    <p className="text-sm text-green-500">Online</p>
-  )
-)}
-          </div>
+    <div className="sticky top-0 z-10">
+      <motion.div 
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className={cn(
+          "h-16 px-4 flex items-center gap-3",
+          "backdrop-blur-md bg-background/80 border-b",
+          "supports-[backdrop-filter]:bg-background/60"
         )}
-      </div>
-      {chatId && (
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon">
-            <Video className="h-5 w-5" />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <MoreVertical className="h-5 w-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {chatInfo?.isGroup ? (
-                <>
-                  <DropdownMenuItem onClick={() => {}}>
-                    <Info className="h-4 w-4 mr-2" />
-                    Group details
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleAddMembers}>
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Add participants
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleMuteToggle}>
-                    {isMuted ? (
-                      <Bell className="h-4 w-4 mr-2" />
-                    ) : (
-                      <BellOff className="h-4 w-4 mr-2" />
-                    )}
-                    {isMuted ? "Turn on notifications" : "Mute notifications"}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLeaveGroup} className="text-red-600">
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Exit group
-                  </DropdownMenuItem>
-                </>
-              ) : (
-                <>
-                  <DropdownMenuItem onClick={() => {}}>
-                    <Users className="h-4 w-4 mr-2" />
-                    Contact info
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleMuteToggle}>
-                    {isMuted ? (
-                      <Bell className="h-4 w-4 mr-2" />
-                    ) : (
-                      <BellOff className="h-4 w-4 mr-2" />
-                    )}
-                    {isMuted ? "Turn on notifications" : "Mute notifications"}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleBlockUser} className="text-red-600">
-                    <UserX className="h-4 w-4 mr-2" />
-                    Block contact
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+      >
+        <Button variant="ghost" size="icon" onClick={onToggleSidebar}>
+          {isMobile ? (
+            <ArrowLeft className="h-5 w-5" />
+          ) : (
+            isSidebarOpen ? (
+              <ChevronLeft className="h-5 w-5" />
+            ) : (
+              <ChevronRight className="h-5 w-5" />
+            )
+          )}
+        </Button>
+        <Avatar>
+          <AvatarImage src={otherUser.image || undefined} />
+          <AvatarFallback>
+            {otherUser.name?.[0]?.toUpperCase() || '?'}
+          </AvatarFallback>
+        </Avatar>
+        <div>
+          <p className="font-medium">{otherUser.name || 'Unknown User'}</p>
+          {isOnline && (
+            <p className="text-sm text-emerald-500 font-medium">
+              Online
+            </p>
+          )}
         </div>
-      )}
+      </motion.div>
     </div>
   );
 } 

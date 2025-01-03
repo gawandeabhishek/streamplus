@@ -53,3 +53,21 @@ export function extractWatchVideoId(text: string): string | null {
   const match = text.match(watchUrlPattern);
   return match ? match[1] : null;
 }
+
+export function formatViews(views: string | number): string {
+  const num = typeof views === 'string' ? parseInt(views) : views;
+  if (num >= 1000000) {
+    return `${(num / 1000000).toFixed(1)}M views`;
+  } else if (num >= 1000) {
+    return `${(num / 1000).toFixed(1)}K views`;
+  }
+  return `${num} views`;
+}
+
+export function formatDate(date: string): string {
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}

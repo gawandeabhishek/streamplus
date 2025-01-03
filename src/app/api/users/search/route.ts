@@ -23,31 +23,32 @@ export async function GET(req: Request) {
           {
             name: {
               contains: query,
-              mode: "insensitive",
-            },
+              mode: "insensitive"
+            }
           },
           {
             email: {
               contains: query,
-              mode: "insensitive",
-            },
-          },
+              mode: "insensitive"
+            }
+          }
         ],
         NOT: {
-          id: session.user.id,
-        },
+          id: session.user.id
+        }
       },
       select: {
         id: true,
         name: true,
         email: true,
-        image: true,
+        image: true
       },
-      take: 10,
+      take: 10
     });
 
     return NextResponse.json(users);
   } catch (error) {
+    console.error("[USERS_SEARCH]", error);
     return new NextResponse("Internal Error", { status: 500 });
   }
 } 

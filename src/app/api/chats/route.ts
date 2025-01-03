@@ -10,50 +10,73 @@ export async function GET(req: Request) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const conversations = await db.conversation.findMany({
+    const chats = await db.chat.findMany({
       where: {
-        OR: [
-          { userId: session.user.id },
-          { friendId: session.user.id }
-        ]
+        participants: {
+          some: {
+            userId: session.user.id
+          }
+        }
       },
       include: {
-        initiator: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-          }
-        },
-        receiver: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+                email: true,
+              }
+            }
           }
         },
         messages: {
           take: 1,
           orderBy: {
             createdAt: 'desc'
+          },
+          select: {
+            content: true,
+            createdAt: true,
+            senderId: true
           }
         }
+      },
+      orderBy: {
+        updatedAt: 'desc'
       }
     });
 
-    return NextResponse.json(conversations);
+    const formattedChats = chats.map(chat => {
+      const otherParticipant = chat.participants.find(
+        p => p.user.id !== session.user.id
+      );
+
+      return {
+        id: chat.id,
+        name: chat.isGroup ? chat.name : otherParticipant?.user.name,
+        image: chat.isGroup ? null : otherParticipant?.user.image,
+        lastMessage: chat.messages[0],
+        isGroup: chat.isGroup,
+        participants: chat.participants.map(p => ({
+          id: p.user.id,
+          name: p.user.name,
+          image: p.user.image,
+          email: p.user.email,
+          isAdmin: p.isAdmin
+        }))
+      };
+    });
+
+    return NextResponse.json(formattedChats);
   } catch (error) {
-    console.error("Error fetching chats:", error);
+    console.error("[CHATS_GET]", error);
     return new NextResponse("Internal Error", { status: 500 });
   }
 }
 
 export async function POST(req: Request) {
-  if (!db) {
-    console.error("Database connection not initialized");
-    return new NextResponse("Database Error", { status: 500 });
-  }
-
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -66,41 +89,57 @@ export async function POST(req: Request) {
       return new NextResponse("Friend ID is required", { status: 400 });
     }
 
-    if (friendId === session.user.id) {
-      return new NextResponse("Cannot create chat with yourself", { status: 400 });
-    }
-
-    const existingConversation = await db.conversation.findFirst({
+    // Check for existing chat
+    const existingChat = await db.chat.findFirst({
       where: {
-        OR: [
-          { AND: [{ userId: session.user.id }, { friendId }] },
-          { AND: [{ userId: friendId }, { friendId: session.user.id }] }
+        isGroup: false,
+        AND: [
+          {
+            participants: {
+              some: {
+                userId: session.user.id
+              }
+            }
+          },
+          {
+            participants: {
+              some: {
+                userId: friendId
+              }
+            }
+          }
         ]
-      },
-      include: {
-        initiator: true,
-        receiver: true
       }
     });
 
-    if (existingConversation) {
-      return NextResponse.json(existingConversation);
+    if (existingChat) {
+      return NextResponse.json(existingChat);
     }
 
-    const conversation = await db.conversation.create({
+    // Create new chat
+    const newChat = await db.chat.create({
       data: {
-        userId: session.user.id,
-        friendId,
+        participants: {
+          createMany: {
+            data: [
+              { userId: session.user.id },
+              { userId: friendId }
+            ]
+          }
+        }
       },
       include: {
-        initiator: true,
-        receiver: true
+        participants: {
+          include: {
+            user: true
+          }
+        }
       }
     });
 
-    return NextResponse.json(conversation);
+    return NextResponse.json(newChat);
   } catch (error) {
-    console.error("[CONVERSATION_CREATE]", error);
+    console.error("[CHAT_CREATE]", error);
     return new NextResponse("Internal Error", { status: 500 });
   }
 } 

@@ -1,131 +1,80 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { formatDistanceToNow } from "date-fns";
-import { motion } from "framer-motion";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useSession } from "next-auth/react";
+import { motion } from "framer-motion";
 import { format } from "date-fns";
-
-interface Chat {
-  id: string;
-  initiator: {
-    id: string;
-    name: string | null;
-    image: string | null;
-  };
-  receiver: {
-    id: string;
-    name: string | null;
-    image: string | null;
-  };
-  messages: {
-    content: string;
-    createdAt: string;
-  }[];
-}
+import { useChat } from "@/hooks/use-chat";
 
 interface ChatListProps {
-  onSelectChat: (chatId: string) => void;
+  onSelect: (chatId: string) => void;
+  selectedId: string | null;
 }
 
-const formatTimeAgo = (timestamp: Date | string) => {
-  const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
-  const now = new Date();
-  
-  // Check if date is valid
-  if (isNaN(date.getTime())) {
-    return '';
+export function ChatList({ onSelect, selectedId }: ChatListProps) {
+  const { chats, loading } = useChat();
+
+  if (loading) {
+    return (
+      <div className="flex-1 overflow-y-auto p-2">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="flex items-center gap-3 p-3 animate-pulse">
+            <div className="w-10 h-10 rounded-full bg-muted" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-1/3 bg-muted rounded" />
+              <div className="h-3 w-2/3 bg-muted rounded" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   }
-  
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  
-  if (diffInSeconds < 60) return 'now';
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} min`;
-  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hr`;
-  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} d`;
-  return `${Math.floor(diffInSeconds / 604800)}w`;
-};
-
-export function ChatList({ onSelectChat }: ChatListProps) {
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [selectedId, setSelectedId] = useState<string>("");
-  const session = useSession();
-  const currentUserId = session.data?.user?.id;
-
-  useEffect(() => {
-  const fetchChats = async () => {
-    try {
-      const response = await fetch('/api/chats');
-        const data = await response.json();
-        setChats(data);
-    } catch (error) {
-      console.error('Error fetching chats:', error);
-    }
-  };
-
-    fetchChats();
-  }, []);
-
-  const handleSelectChat = (chatId: string) => {
-    setSelectedId(chatId);
-    onSelectChat(chatId);
-  };
-
-  const getOtherUser = (chat: Chat) => {
-    if (chat.initiator.id === currentUserId) {
-      return chat.receiver;
-    }
-    return chat.initiator;
-  };
 
   return (
-    <ScrollArea className="flex-1">
+    <div className="flex-1 overflow-y-auto">
       <div className="space-y-2 p-2">
-        {chats.map((chat) => {
-          const otherUser = getOtherUser(chat);
-          return (
-            <motion.div
-              key={chat.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn(
-                "flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-accent/50 transition-colors",
-                "w-full",
-                selectedId === chat.id && "bg-accent"
-              )}
-              onClick={() => handleSelectChat(chat.id)}
-            >
-              <Avatar className="h-10 w-10 flex-shrink-0">
-                <AvatarImage src={otherUser?.image || ""} />
-                <AvatarFallback>
-                  {otherUser?.name?.[0]?.toUpperCase() || '?'}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between w-[80%]">
-                  <p className="font-medium truncate max-w-[180px]">
-                    {otherUser?.name || 'Unknown User'}
-                  </p>
-                  {chat.messages[0]?.createdAt && (
-                    <span className="text-xs text-muted-foreground flex-shrink-0">
-                      {formatTimeAgo(chat.messages[0].createdAt)}
-                    </span>
-                  )}
-                </div>
-                {chat.messages[0]?.content && (
-                  <p className="text-sm text-muted-foreground line-clamp-1">
-                    {chat.messages[0].content}
-                  </p>
+        {chats?.map((chat, i) => (
+          <motion.button
+            key={chat.id}
+            onClick={() => onSelect(chat.id)}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+            className={cn(
+              "w-full flex items-center gap-3 p-3 rounded-xl",
+              "hover:bg-accent/80 transition-colors",
+              "text-left",
+              selectedId === chat.id && "bg-accent"
+            )}
+          >
+            <Avatar>
+              <AvatarImage src={chat.image} />
+              <AvatarFallback>
+                {chat.name?.[0]?.toUpperCase() || '?'}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <p className="font-medium truncate">{chat.name}</p>
+                <span className="text-xs text-muted-foreground">
+                  {format(new Date(chat.lastMessage?.createdAt || Date.now()), "HH:mm")}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground truncate">
+                  {chat.lastMessage?.content || 'No messages yet'}
+                </p>
+                {chat.unreadCount > 0 && (
+                  <span className="bg-primary text-primary-foreground text-xs rounded-full px-2 py-0.5">
+                    {chat.unreadCount}
+                  </span>
                 )}
               </div>
-            </motion.div>
-          );
-        })}
+            </div>
+          </motion.button>
+        ))}
       </div>
-    </ScrollArea>
+    </div>
   );
 } 

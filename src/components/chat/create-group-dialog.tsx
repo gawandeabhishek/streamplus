@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,64 +28,30 @@ export function CreateGroupDialog({ friends = [] }: { friends?: Friend[] }) {
   const [groupName, setGroupName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFriends, setSelectedFriends] = useState<Friend[]>([]);
-  const [availableFriends, setAvailableFriends] = useState<Friend[]>(friends);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
-  // Reset states when dialog closes
-  useEffect(() => {
-    if (!open) {
-      setGroupName("");
-      setSearchQuery("");
-      setSelectedFriends([]);
-      setAvailableFriends(friends);
-    }
-  }, [open, friends]);
-
-  // Update available friends based on mutual connections
-  useEffect(() => {
-    const updateAvailableFriends = async () => {
-      if (selectedFriends.length > 0) {
-        try {
-          const response = await fetch('/api/friends/mutual', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              friendIds: selectedFriends.map(f => f.id)
-            })
-          });
-          
-          if (response.ok) {
-            const mutualFriends = await response.json();
-            setAvailableFriends(mutualFriends);
-          }
-        } catch (error) {
-          console.error('Error fetching mutual friends:', error);
-        }
-      } else {
-        setAvailableFriends(friends);
-      }
-    };
-
-    updateAvailableFriends();
-  }, [selectedFriends, friends]);
-
+  // Use useMemo for filtered friends
   const filteredFriends = useMemo(() => {
-    return availableFriends.filter(friend => 
+    return friends.filter(friend => 
       friend.name?.toLowerCase().includes(searchQuery.toLowerCase()) &&
       !selectedFriends.some(selected => selected.id === friend.id)
     );
-  }, [availableFriends, searchQuery, selectedFriends]);
+  }, [friends, searchQuery, selectedFriends]);
 
   const isCreateDisabled = 
     isLoading || 
     !groupName.trim() || 
-    selectedFriends.length < 2 || // Minimum 3 total members (including current user)
-    friends.length < 2; // Need at least 2 friends to create a group
+    selectedFriends.length < 2 || 
+    friends.length < 2;
 
   const handleRemoveFriend = (friendId: string) => {
     setSelectedFriends(prev => prev.filter(f => f.id !== friendId));
+  };
+
+  const handleSelectFriend = (friend: Friend) => {
+    setSelectedFriends(prev => [...prev, friend]);
   };
 
   const handleCreateGroup = async () => {
@@ -117,8 +83,15 @@ export function CreateGroupDialog({ friends = [] }: { friends?: Friend[] }) {
     }
   };
 
+  const handleClose = () => {
+    setOpen(false);
+    setGroupName("");
+    setSearchQuery("");
+    setSelectedFriends([]);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogTrigger asChild>
         <Button 
           variant="outline" 
@@ -140,7 +113,6 @@ export function CreateGroupDialog({ friends = [] }: { friends?: Friend[] }) {
             onChange={(e) => setGroupName(e.target.value)}
           />
           
-          {/* Selected Friends */}
           {selectedFriends.length > 0 && (
             <ScrollArea className="max-h-20">
               <div className="flex flex-wrap gap-2 p-2">
@@ -182,7 +154,7 @@ export function CreateGroupDialog({ friends = [] }: { friends?: Friend[] }) {
                   <div
                     key={friend.id}
                     className="flex items-center space-x-3 p-2 rounded-lg cursor-pointer hover:bg-muted"
-                    onClick={() => setSelectedFriends(prev => [...prev, friend])}
+                    onClick={() => handleSelectFriend(friend)}
                   >
                     <Avatar>
                       <AvatarImage src={friend.image ?? undefined} />
@@ -202,7 +174,7 @@ export function CreateGroupDialog({ friends = [] }: { friends?: Friend[] }) {
               {selectedFriends.length} selected
             </span>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setOpen(false)}>
+              <Button variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
               <Button 

@@ -1,72 +1,50 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import { useSupabase } from "./supabase-provider";
 import { useSession } from "next-auth/react";
-import { supabase } from "@/lib/supabase";
 
-interface PresenceProviderProps {
-  children: (onlineUsers: string[]) => React.ReactNode;
-}
+type PresenceContextType = {
+  onlineUsers: { user_id: string; email: string; }[];
+};
 
-interface PresencePayload {
-  new: {
-    user_id: string;
-  };
-  old?: {
-    user_id: string;
-  };
-}
+const PresenceContext = createContext<PresenceContextType>({ onlineUsers: [] });
 
-export function PresenceProvider({ children }: PresenceProviderProps) {
+export function PresenceProvider({ children }: { children: React.ReactNode }) {
+  const [onlineUsers, setOnlineUsers] = useState<{ user_id: string; email: string; }[]>([]);
+  const { supabase } = useSupabase();
   const { data: session } = useSession();
-  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
 
   useEffect(() => {
-    if (session?.user?.id) {
-      const updatePresence = async () => {
-        await supabase.from("presence").upsert({
-          user_id: session.user.id,
-          online_at: document.hasFocus() ? new Date().toISOString() : null,
-        });
-      };
+    if (!session?.user?.email) return;
 
-      window.addEventListener("focus", updatePresence);
-      window.addEventListener("blur", updatePresence);
+    const channel = supabase.channel('online-users')
+      .on('presence', { event: 'sync' }, () => {
+        const newState = channel.presenceState();
+        const presenceArray = Object.values(newState)
+          .flat()
+          .map(presence => presence as unknown as { user_id: string; email: string; });
+        setOnlineUsers(presenceArray);
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({
+            user_id: session.user.id,
+            email: session.user.email,
+          });
+        }
+      });
 
-      // Initial presence update
-      updatePresence();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session, supabase]);
 
-      // Subscribe to presence changes
-      // Change this part:
-      const presenceSubscription = supabase
-        .channel("presence_channel")
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "presence",
-          },
-          (payload) => {
-            if (payload.eventType === "INSERT") {
-              setOnlineUsers((prev) => [...prev, payload.new.user_id]);
-            } else if (payload.eventType === "DELETE") {
-              setOnlineUsers((prev) =>
-                prev.filter((id) => id !== payload.old?.user_id)
-              );
-            }
-          }
-        )
-        .subscribe();
-
-      // And update cleanup:
-      return () => {
-        window.removeEventListener("focus", updatePresence);
-        window.removeEventListener("blur", updatePresence);
-        presenceSubscription.unsubscribe();
-      };
-    }
-  }, [session?.user?.id]);
-
-  return <>{children(onlineUsers)}</>;
+  return (
+    <PresenceContext.Provider value={{ onlineUsers }}>
+      {children}
+    </PresenceContext.Provider>
+  );
 }
+
+export const usePresence = () => useContext(PresenceContext);

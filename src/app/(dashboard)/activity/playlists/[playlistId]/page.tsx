@@ -9,6 +9,9 @@ import { ListMusic } from "lucide-react";
 import { VideoGrid } from "@/components/video/video-grid";
 import { Suspense } from "react";
 import { PlaylistVideosSkeleton } from "@/components/skeletons/playlist-videos-skeleton";
+// changed for git push
+import { formatDate, formatViews } from "@/lib/utils";
+// 
 
 interface PlaylistPageProps {
   params: {
@@ -69,7 +72,7 @@ export default async function PlaylistPage({ params }: PlaylistPageProps) {
     <DashboardShell>
       <DashboardHeader
         heading="Playlist"
-        text="Videos in this playlist"
+        description="Videos in this playlist"
       />
       <Suspense fallback={<PlaylistVideosSkeleton />}>
         <PlaylistContent params={params} />
@@ -91,6 +94,12 @@ async function PlaylistContent({ params }: PlaylistPageProps) {
     
     const playlistTitle = playlist.data.items?.[0]?.snippet?.title || 'Playlist';
 
+    const formattedVideos = videos.map(video => ({
+      ...video,
+      formattedDate: formatDate(video.publishedAt),
+      formattedViews: formatViews(video.viewCount)
+    }));
+
     return (
       <Card>
         <CardHeader className="flex flex-row items-center gap-2 space-y-0">
@@ -107,7 +116,9 @@ async function PlaylistContent({ params }: PlaylistPageProps) {
               </p>
             </div>
           ) : (
-            <VideoGrid videos={videos} />
+            // changed for git push
+            <VideoGrid videos={formattedVideos} />
+            // 
           )}
         </CardContent>
       </Card>

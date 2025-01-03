@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ReactLinkify from 'react-linkify';
 import { useEffect, useState } from "react";
 import { VideoCard } from "./video-card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface VideoPreview {
   id: string;
@@ -72,10 +73,35 @@ export function ChatMessage({ message }: ChatMessageProps) {
     </a>
   );
 
+  if (isLoading) {
+    return (
+      <div className={cn(
+        "flex items-start gap-4 p-4",
+        isCurrentUser && "flex-row-reverse"
+      )}>
+        <Skeleton className="h-10 w-10 rounded-full flex-shrink-0" />
+        <div className={cn(
+          "flex flex-col gap-2",
+          isCurrentUser && "items-end"
+        )}>
+          {!isCurrentUser && (
+            <Skeleton className="h-4 w-[120px]" />
+          )}
+          <Skeleton className={cn(
+            "h-16 w-[250px] rounded-lg",
+            isCurrentUser ? "ml-auto" : "mr-auto"
+          )} />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={cn("flex items-start gap-4 p-4", 
-      isCurrentUser && "flex-row-reverse")}>
-      <Avatar>
+    <div className={cn(
+      "flex items-start gap-4 p-4", 
+      isCurrentUser && "flex-row-reverse"
+    )}>
+      <Avatar className="flex-shrink-0">
         <AvatarImage 
           src={isCurrentUser ? session?.user?.image || "" : message.sender.image || ""} 
         />
@@ -85,8 +111,10 @@ export function ChatMessage({ message }: ChatMessageProps) {
             : getInitials(message.sender.name)}
         </AvatarFallback>
       </Avatar>
-      <div className={cn("flex flex-col gap-1",
-        isCurrentUser && "items-end")}>
+      <div className={cn(
+        "flex flex-col gap-1",
+        isCurrentUser && "items-end"
+      )}>
         {!isCurrentUser && (
           <span className="text-sm text-muted-foreground">
             {message.sender.name}

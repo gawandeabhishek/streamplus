@@ -11,43 +11,47 @@ export async function POST(req: Request) {
     }
 
     const { name, memberIds } = await req.json();
-    console.log("Creating group with:", { name, memberIds, userId: session.user.id }); // Debug log
 
     if (!name || !memberIds?.length) {
       return new NextResponse("Invalid request", { status: 400 });
     }
 
+    // Create group chat with participants
     const chat = await db.chat.create({
       data: {
         name,
         isGroup: true,
-        members: {
-          create: [
-            {
-              userId: session.user.id,
-              isAdmin: true,
-            },
-            ...memberIds.map((id: string) => ({
-              userId: id,
-              isAdmin: false,
-            })),
-          ],
-        },
+        participants: {
+          createMany: {
+            data: [
+              { userId: session.user.id, isAdmin: true },
+              ...memberIds.map((id: string) => ({
+                userId: id,
+                isAdmin: false
+              }))
+            ]
+          }
+        }
       },
       include: {
-        members: {
+        participants: {
           include: {
-            user: true,
-          },
-        },
-      },
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+                email: true
+              }
+            }
+          }
+        }
+      }
     });
 
-    console.log("Created chat:", chat); // Debug log
     return NextResponse.json(chat);
-
   } catch (error) {
-    console.error("[CREATE_GROUP_CHAT]", error);
+    console.error("[GROUP_CREATE]", error);
     return new NextResponse("Internal Error", { status: 500 });
   }
 } 

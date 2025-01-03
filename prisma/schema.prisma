@@ -31,6 +31,7 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@index([userId])
 }
 
 model Session {
@@ -38,7 +39,10 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model User {
@@ -47,16 +51,18 @@ model User {
   email              String?           @unique
   emailVerified      DateTime?
   image              String?
+  password           String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
   subscriptionStatus SubscriptionStatus @default(FREE)
   stripeCustomerId   String?           @unique
   accounts           Account[]
   sessions           Session[]
+  participants       Participant[]
+  messages           Message[]         @relation("SentMessages")
   activities         Activity[]
-  sentFriendRequests Friend[]          @relation("SentFriendRequests")
-  receivedFriendRequests Friend[]      @relation("ReceivedFriendRequests")
-  sentMessages       Message[]         @relation("SentMessages")
-  initiatedConversations Conversation[] @relation("UserConversations")
-  receivedConversations  Conversation[] @relation("FriendConversations")
+  sentFriendRequests Friend[] @relation("SentFriendRequests")
+  receivedFriendRequests Friend[] @relation("ReceivedFriendRequests")
 }
 
 model VerificationToken {
@@ -94,30 +100,44 @@ model Friend {
 }
 
 model Message {
-  id             String       @id @default(cuid())
-  content        String
-  senderId       String
-  conversationId String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+  senderId  String
+  chatId    String
+  
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
+  @@index([chatId])
   @@index([senderId])
-  @@index([conversationId])
+  @@index([createdAt])
 }
 
-model Conversation {
-  id        String    @id @default(cuid())
-  userId    String
-  friendId  String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  messages  Message[]
-  initiator User      @relation("UserConversations", fields: [userId], references: [id], onDelete: Cascade)
-  receiver  User      @relation("FriendConversations", fields: [friendId], references: [id], onDelete: Cascade)
+model Chat {
+  id           String        @id @default(cuid())
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  name         String?       // For group chats
+  isGroup      Boolean       @default(false)
+  messages     Message[]
+  participants Participant[]
 
-  @@unique([userId, friendId])
+  @@index([updatedAt])
+}
+
+model Participant {
+  id        String   @id @default(cuid())
+  userId    String
+  chatId    String
+  isAdmin   Boolean  @default(false)
+  isMuted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chatId])
   @@index([userId])
-  @@index([friendId])
+  @@index([chatId])
 } 
