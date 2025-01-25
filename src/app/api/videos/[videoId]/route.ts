@@ -1,29 +1,26 @@
 import { NextResponse } from "next/server";
-import { getYoutubeClient } from "@/lib/youtube";
 
 export async function GET(
   req: Request,
   { params }: { params: { videoId: string } }
 ) {
   try {
-    const youtube = await getYoutubeClient();
-    const response = await youtube.videos.list({
-      part: ['snippet', 'statistics', 'contentDetails'],
-      id: [params.videoId]
-    });
+    const oembedResponse = await fetch(
+      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${params.videoId}&format=json`
+    ).then(res => res.json());
 
-    const video = response.data.items?.[0];
-    if (!video) {
+    if (!oembedResponse) {
       return new NextResponse("Video not found", { status: 404 });
     }
 
     return NextResponse.json({
-      id: video.id,
-      title: video.snippet?.title,
-      thumbnail: video.snippet?.thumbnails?.high?.url,
-      duration: video.contentDetails?.duration,
-      channelTitle: video.snippet?.channelTitle,
-      viewCount: video.statistics?.viewCount
+      id: params.videoId,
+      title: oembedResponse.title,
+      thumbnail: oembedResponse.thumbnail_url,
+      channelTitle: oembedResponse.author_name,
+      duration: "PT0M0S",
+      views: 0,
+      html: oembedResponse.html
     });
   } catch (error) {
     console.error("Error fetching video:", error);

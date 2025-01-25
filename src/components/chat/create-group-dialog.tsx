@@ -1,191 +1,230 @@
 "use client";
 
-import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Users, Search, X } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
-import { useRouter } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
+import { Search, X, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Friend } from "@/types";
+import { toast } from "sonner";
 
-interface Friend {
-  id: string;
-  name: string | null;
-  image: string | null;
+interface CreateGroupDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onChatCreated?: (chatId: string) => void;
 }
 
-export function CreateGroupDialog({ friends = [] }: { friends?: Friend[] }) {
-  const [open, setOpen] = useState(false);
+export function CreateGroupDialog({ 
+  open, 
+  onOpenChange,
+  onChatCreated 
+}: CreateGroupDialogProps) {
   const [groupName, setGroupName] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFriends, setSelectedFriends] = useState<Friend[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [selectedFriend, setSelectedFriend] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
   const router = useRouter();
 
-  // Use useMemo for filtered friends
-  const filteredFriends = useMemo(() => {
-    return friends.filter(friend => 
-      friend.name?.toLowerCase().includes(searchQuery.toLowerCase()) &&
-      !selectedFriends.some(selected => selected.id === friend.id)
-    );
-  }, [friends, searchQuery, selectedFriends]);
-
-  const isCreateDisabled = 
-    isLoading || 
-    !groupName.trim() || 
-    selectedFriends.length < 2 || 
-    friends.length < 2;
-
-  const handleRemoveFriend = (friendId: string) => {
-    setSelectedFriends(prev => prev.filter(f => f.id !== friendId));
+  const toggleFriend = (friendId: string) => {
+    setSelectedFriends(prev => {
+      const isAlreadySelected = prev.includes(friendId);
+      
+      if (isAlreadySelected) {
+        // If removing the first selected friend, clear selectedFriend
+        if (selectedFriend === friendId) {
+          setSelectedFriend(null);
+        }
+        return prev.filter(id => id !== friendId);
+      } else {
+        // If this is the first selection
+        if (prev.length === 0) {
+          setSelectedFriend(friendId);
+        }
+        return [...prev, friendId];
+      }
+    });
   };
 
-  const handleSelectFriend = (friend: Friend) => {
-    setSelectedFriends(prev => [...prev, friend]);
-  };
+  useEffect(() => {
+    const fetchFriends = async () => {
+      try {
+        // Only fetch mutual friends if we have a selected friend AND more than one selection
+        const shouldFetchMutual = selectedFriend && selectedFriends.length > 1;
+        const url = shouldFetchMutual
+          ? `/api/friends/mutual?selectedFriendId=${selectedFriend}`
+          : '/api/friends/mutual';
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Failed to fetch friends");
+        const data = await response.json();
+        setFriends(prev => {
+          // Keep selected friends in the list
+          const selectedFriendsData = prev.filter((f: Friend) => selectedFriends.includes(f.id));
+          const newFriends = data.filter((f: Friend) => !selectedFriends.includes(f.id));
+          return [...selectedFriendsData, ...newFriends];
+        });
+      } catch (error) {
+        console.error("Error fetching friends:", error);
+      }
+    };
 
-  const handleCreateGroup = async () => {
+    if (open) {
+      fetchFriends();
+    }
+  }, [open, selectedFriend, selectedFriends.length]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     if (!groupName.trim() || selectedFriends.length < 2) return;
-    
+
     setIsLoading(true);
     try {
-      const response = await fetch("/api/chats/group", {
+      const response = await fetch("/api/chat/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify({ 
           name: groupName,
-          memberIds: selectedFriends.map(f => f.id)
+          participantIds: selectedFriends 
         }),
       });
 
-      if (!response.ok) throw new Error();
+      const data = await response.json();
 
-      toast({ description: "Group created successfully!" });
-      setOpen(false);
-      router.refresh();
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        description: "Failed to create group",
-      });
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to create group");
+      }
+
+      toast.success("Group created successfully!");
+      onChatCreated?.(data.chatId);
+      onOpenChange(false);
+      setSelectedFriends([]);
+      setGroupName("");
+    } catch (error: any) {
+      console.error("Error creating group:", error);
+      toast.error(error.message || "Failed to create group. Please try again.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
-  const handleClose = () => {
-    setOpen(false);
-    setGroupName("");
-    setSearchQuery("");
-    setSelectedFriends([]);
-  };
+  const filteredFriends = useMemo(() => {
+    console.log("Filtering friends:", friends, "Query:", searchQuery);
+    return friends.filter(friend => 
+      friend.name?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [friends, searchQuery]);
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogTrigger asChild>
-        <Button 
-          variant="outline" 
-          className="w-full flex items-center gap-2"
-          disabled={friends.length < 2}
-        >
-          <Users className="h-4 w-4" />
-          <span>New Group Chat</span>
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-md">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Create New Group</DialogTitle>
+          <DialogDescription>
+            Create a new group chat with your mutual friends.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <Input
-            placeholder="Group name"
-            value={groupName}
-            onChange={(e) => setGroupName(e.target.value)}
-          />
-          
-          {selectedFriends.length > 0 && (
-            <ScrollArea className="max-h-20">
-              <div className="flex flex-wrap gap-2 p-2">
-                {selectedFriends.map((friend) => (
-                  <Badge 
-                    key={friend.id} 
-                    variant="secondary"
-                    className="flex items-center gap-1"
-                  >
-                    {friend.name}
-                    <X 
-                      className="h-3 w-3 cursor-pointer" 
-                      onClick={() => handleRemoveFriend(friend.id)}
-                    />
-                  </Badge>
-                ))}
-              </div>
-            </ScrollArea>
-          )}
-
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search friends..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-
-          {friends.length < 2 ? (
-            <div className="text-center text-sm text-muted-foreground p-4">
-              You need at least 2 friends to create a group chat
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Group Name</Label>
+              <Input
+                id="name"
+                placeholder="Enter group name"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+              />
             </div>
-          ) : (
-            <ScrollArea className="h-[200px]">
-              <div className="space-y-2">
-                {filteredFriends.map((friend) => (
-                  <div
-                    key={friend.id}
-                    className="flex items-center space-x-3 p-2 rounded-lg cursor-pointer hover:bg-muted"
-                    onClick={() => handleSelectFriend(friend)}
-                  >
-                    <Avatar>
-                      <AvatarImage src={friend.image ?? undefined} />
-                      <AvatarFallback>
-                        {friend.name?.[0]?.toUpperCase() ?? "?"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span>{friend.name}</span>
-                  </div>
-                ))}
+            <div className="space-y-2">
+              <Label>Select Friends (minimum 2)</Label>
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search friends..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8"
+                />
               </div>
-            </ScrollArea>
-          )}
+              
+              {/* Selected Friends Capsules */}
+              {selectedFriends.length > 0 && (
+                <div className="flex flex-wrap gap-2 my-3 pb-2 border-b">
+                  {selectedFriends.map(friendId => {
+                    const friend = friends.find(f => f.id === friendId);
+                    return (
+                      <div
+                        key={friendId}
+                        className="flex items-center gap-1.5 bg-secondary px-3 py-1.5 rounded-full"
+                      >
+                        <span className="text-sm">{friend?.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleFriend(friendId)}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-          <div className="flex justify-between items-center pt-4">
-            <span className="text-sm text-muted-foreground">
-              {selectedFriends.length} selected
-            </span>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleClose}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleCreateGroup} 
-                disabled={isCreateDisabled}
-              >
-                {isLoading ? "Creating..." : "Create Group"}
-              </Button>
+              <ScrollArea className="h-[200px] border rounded-md">
+                <div className="space-y-2 p-2">
+                  {filteredFriends.map((friend) => (
+                    <div
+                      key={friend.id}
+                      onClick={() => toggleFriend(friend.id)}
+                      className={cn(
+                        "flex items-center space-x-2 p-3 hover:bg-accent rounded-md cursor-pointer",
+                        selectedFriends.includes(friend.id) && "bg-accent"
+                      )}
+                    >
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={friend.image || undefined} />
+                        <AvatarFallback>
+                          {friend.name?.[0]?.toUpperCase() || '?'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span>{friend.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
             </div>
           </div>
-        </div>
+          <DialogFooter>
+            <Button
+              type="submit"
+              disabled={selectedFriends.length < 2 || !groupName.trim() || isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Group'
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

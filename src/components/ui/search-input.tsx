@@ -1,31 +1,34 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useTransition } from "react";
 
 export function SearchInput() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [value, setValue] = useState(searchParams.get("q") || "");
-
-  useEffect(() => {
-    setValue(searchParams.get("q") || "");
-  }, [searchParams]);
+  const [isPending, startTransition] = useTransition();
 
   const handleSearch = (term: string) => {
-    setValue(term);
-    const params = new URLSearchParams();
-    if (term) params.set("q", term);
-    router.push(`/explore?${params.toString()}`);
+    const params = new URLSearchParams(searchParams);
+    if (term) {
+      params.set("q", term);
+    } else {
+      params.delete("q");
+    }
+
+    startTransition(() => {
+      router.push(`/explore?${params.toString()}`);
+    });
   };
 
   return (
     <Input
       type="search"
       placeholder="Search videos..."
-      value={value}
+      defaultValue={searchParams.get("q") ?? ""}
       onChange={(e) => handleSearch(e.target.value)}
+      className={isPending ? "opacity-50" : ""}
     />
   );
 } 

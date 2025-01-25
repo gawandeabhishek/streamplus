@@ -43,27 +43,34 @@ async function ExploreContent({ searchParams }: ExplorePageProps) {
           <p className="text-sm text-muted-foreground">
             {video.channelTitle}
           </p>
-          <p className="text-sm text-muted-foreground">
-            {video.viewCount} views
-          </p>
         </Link>
       ))}
     </div>
   );
 }
 
-export default async function ExplorePage({ searchParams }: ExplorePageProps) {
+export default function ExplorePage({ searchParams }: ExplorePageProps) {
   return (
     <DashboardShell>
       <DashboardHeader
         heading="Explore"
-        text="Search and discover videos to watch together"
+        description="Search and discover videos to watch together"
       />
       <div className="grid gap-6">
         <div className="max-w-2xl">
           <SearchInput />
         </div>
-        <Suspense fallback={<VideoGrid videos={[]} isLoading />}>
+        <Suspense fallback={
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <div className="aspect-video bg-muted rounded-lg animate-pulse" />
+                <div className="h-4 w-3/4 bg-muted rounded animate-pulse" />
+                <div className="h-4 w-1/2 bg-muted rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+        }>
           <ExploreContent searchParams={searchParams} />
         </Suspense>
       </div>

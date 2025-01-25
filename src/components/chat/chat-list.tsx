@@ -6,30 +6,71 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import { useChat } from "@/hooks/use-chat";
+import { useEffect, useState } from "react";
+import { useSupabase } from "@/components/providers/supabase-provider";
+import { useSession } from "next-auth/react";
 
 interface ChatListProps {
   onSelect: (chatId: string) => void;
-  selectedId: string | null;
+  selectedId?: string | null;
 }
 
 export function ChatList({ onSelect, selectedId }: ChatListProps) {
-  const { chats, loading } = useChat();
+  const [chats, setChats] = useState<any[]>([]);
+  const { supabase } = useSupabase();
+  const { data: session } = useSession();
 
-  if (loading) {
-    return (
-      <div className="flex-1 overflow-y-auto p-2">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="flex items-center gap-3 p-3 animate-pulse">
-            <div className="w-10 h-10 rounded-full bg-muted" />
-            <div className="flex-1 space-y-2">
-              <div className="h-4 w-1/3 bg-muted rounded" />
-              <div className="h-3 w-2/3 bg-muted rounded" />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    // Initial fetch
+    fetchChats();
+
+    // Set up real-time subscriptions for both Chat and ChatParticipant tables
+    const chatChannel = supabase
+      .channel('chat-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'Chat',
+        filter: `participants->>'userId'=eq.${session.user.id}`,
+      }, () => {
+        fetchChats();
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'ChatParticipant',
+        filter: `userId=eq.${session.user.id}`,
+      }, () => {
+        fetchChats();
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'Message',
+      }, () => {
+        fetchChats();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(chatChannel);
+    };
+  }, [session?.user?.id, supabase]);
+
+  const fetchChats = async () => {
+    if (!session?.user?.id) return;
+    
+    try {
+      const response = await fetch('/api/chats');
+      if (!response.ok) throw new Error('Failed to fetch chats');
+      const data = await response.json();
+      setChats(data);
+    } catch (error) {
+      console.error('Error fetching chats:', error);
+    }
+  };
 
   return (
     <div className="flex-1 overflow-y-auto">

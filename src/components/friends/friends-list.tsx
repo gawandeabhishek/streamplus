@@ -22,7 +22,7 @@ export function FriendsList() {
   const { data: session } = useSession();
   const [searchQuery, setSearchQuery] = useState("");
   const [users, setUsers] = useState<User[]>([]);
-  const [friends, setFriends] = useState<User[]>([]);
+  const [friends, setFriends] = useState<any[]>([]);
   const [friendStates, setFriendStates] = useState<Map<string, string>>(new Map());
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
 
@@ -164,6 +164,45 @@ export function FriendsList() {
     }
   };
 
+  const handleRemoveFriend = async (friendId: string) => {
+    try {
+      const response = await fetch("/api/friends/remove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friendId }),
+      });
+
+      if (response.ok) {
+        setFriends(prev => prev.filter(friend => friend.id !== friendId));
+        toast.success("Friend removed successfully");
+      } else {
+        toast.error("Failed to remove friend");
+      }
+    } catch (error) {
+      console.error("Error removing friend:", error);
+      toast.error("Failed to remove friend");
+    }
+  };
+
+  const handleAddFriend = async (userId: string) => {
+    try {
+      const response = await fetch("/api/friends", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friendId: userId }),
+      });
+
+      if (response.ok) {
+        toast.success("Friend request sent");
+        await fetchFriendStates();
+      } else {
+        throw new Error();
+      }
+    } catch (error) {
+      toast.error("Failed to send friend request");
+    }
+  };
+
   const getButtonProps = (userId: string) => {
     const state = friendStates.get(userId);
     if (loadingStates[userId]) {
@@ -227,68 +266,67 @@ export function FriendsList() {
           />
         </div>
         <div className="space-y-4">
-          <AnimatePresence>
-            {searchQuery.length >= 3 ? (
-              users.map((user) => (
-                <motion.div
-                  key={user.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="flex items-center justify-between p-4 rounded-lg border"
+          {searchQuery.length >= 3 && users.map((user) => (
+            <Card key={user.id}>
+              <CardContent className="flex items-center justify-between p-6">
+                <div className="flex items-center gap-4">
+                  <Avatar>
+                    <AvatarImage src={user.image || undefined} />
+                    <AvatarFallback>{user.name?.[0]?.toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-semibold">{user.name}</p>
+                    <p className="text-sm text-muted-foreground">{user.email}</p>
+                  </div>
+                </div>
+                <Button 
+                  variant="outline"
+                  onClick={() => handleAddFriend(user.id)}
                 >
-                  <div className="flex items-center gap-3">
+                  Add Friend
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+          
+          {searchQuery.length >= 3 && users.length === 0 && (
+            <p className="text-center text-muted-foreground">No users found</p>
+          )}
+
+          {searchQuery.length < 3 && friends.map((friend) => {
+            // Determine if current user is the sender
+            const isSender = friend.userId === session?.user?.id;
+            // Get the other user's data
+            const otherUser = isSender ? friend.receiver : friend.sender;
+
+            return (
+              <Card key={friend.id}>
+                <CardContent className="flex items-center justify-between p-6">
+                  <div className="flex items-center gap-4">
                     <Avatar>
-                      <AvatarImage src={user.image || ""} />
-                      <AvatarFallback>
-                        {user.name?.charAt(0) || '?'}
-                      </AvatarFallback>
+                      <AvatarImage src={otherUser.image || undefined} />
+                      <AvatarFallback>{otherUser.name?.[0] || '?'}</AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium">{user.name}</p>
-                      <p className="text-sm text-muted-foreground">{user.email}</p>
+                      <p className="font-semibold">{otherUser.name}</p>
+                      <p className="text-sm text-muted-foreground">{otherUser.email}</p>
                     </div>
                   </div>
                   <Button
-                    size="sm"
-                    {...getButtonProps(user.id)}
-                    className="transition-all duration-300"
-                  />
-                </motion.div>
-              ))
-            ) : (
-              friends.map((friend) => (
-                <motion.div
-                  key={friend.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center justify-between p-4 rounded-lg border"
-                >
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={friend.image || ""} />
-                      <AvatarFallback>
-                        {friend.name?.charAt(0) || '?'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium">{friend.name}</p>
-                      <p className="text-sm text-muted-foreground">{friend.email}</p>
-                    </div>
-                  </div>
-                  <Button
+                    onClick={() => handleRemoveFriend(friend.id)}
                     variant="destructive"
                     size="sm"
-                    onClick={() => handleFriendAction(friend.id)}
-                    className="transition-all duration-300"
                   >
-                    <UserMinus className="h-4 w-4 mr-1" />
                     Remove
                   </Button>
-                </motion.div>
-              ))
-            )}
-          </AnimatePresence>
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          {friends.length === 0 && (
+            <p className="text-center text-muted-foreground">No friends yet</p>
+          )}
         </div>
       </CardContent>
     </Card>

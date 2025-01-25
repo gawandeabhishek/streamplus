@@ -37,8 +37,6 @@ export function VideoCard({
 }: VideoCardProps) {
   const router = useRouter();
 
-  if (!views) return null;
-
   const handleWatchTogether = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();

@@ -10,43 +10,33 @@ export async function POST(req: Request) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const { friendId } = await req.json();
+    const { requestId } = await req.json();
 
-    const existingRequest = await db.friend.findFirst({
-      where: {
-        OR: [
-          {
-            userId: friendId,
-            friendId: session.user.id,
-            status: "pending"
-          }
-        ]
-      }
+    // First find the request
+    const request = await db.friend.findUnique({
+      where: { id: requestId }
     });
 
-    if (!existingRequest) {
-      return new NextResponse("Friend request not found", { status: 404 });
+    if (!request) {
+      return new NextResponse("Request not found", { status: 404 });
     }
 
-    const updatedFriend = await db.friend.update({
-      where: {
-        id: existingRequest.id
-      },
-      data: {
-        status: "accepted"
-      }
+    // Update the request status
+    const updatedRequest = await db.friend.update({
+      where: { id: requestId },
+      data: { status: "accepted" }
     });
 
-    // Create the reverse relationship
+    // Create bi-directional friendship
     await db.friend.create({
       data: {
-        userId: session.user.id,
-        friendId: friendId,
+        userId: request.friendId,
+        friendId: request.userId,
         status: "accepted"
       }
     });
 
-    return NextResponse.json(updatedFriend);
+    return NextResponse.json(updatedRequest);
   } catch (error) {
     console.error("[FRIEND_ACCEPT]", error);
     return new NextResponse("Internal Error", { status: 500 });

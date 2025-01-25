@@ -1,3 +1,5 @@
+"use client";
+
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -5,6 +7,7 @@ import ReactLinkify from 'react-linkify';
 import { useEffect, useState } from "react";
 import { VideoCard } from "./video-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useRouter } from "next/navigation";
 
 interface VideoPreview {
   id: string;
@@ -23,6 +26,12 @@ interface ChatMessageProps {
       name: string | null;
       image: string | null;
     };
+    metadata?: {
+      type: string;
+      videoId: string;
+      senderId: string;
+      senderName: string;
+    };
   };
 }
 
@@ -32,9 +41,43 @@ export function ChatMessage({ message }: ChatMessageProps) {
   const [isLoading, setIsLoading] = useState(false);
   const isCurrentUser = message.senderId === session?.user.id;
 
+  console.log(videoPreview)
+
   useEffect(() => {
     const fetchVideoPreview = async () => {
+      console.log("Message content:", message.content);
+      console.log("Message metadata:", message.metadata);
+
+      // First check metadata for watch_invite
+      if (message.metadata?.type === 'watch_invite' && message.metadata.videoId) {
+        console.log("Found watch invite metadata, videoId:", message.metadata.videoId);
+        setIsLoading(true);
+        try {
+          const response = await fetch(`/api/videos/${message.metadata.videoId}`);
+          const data = await response.json();
+          console.log("Video API response:", data);
+          
+          if (!response.ok) throw new Error('Failed to fetch video preview');
+          
+          setVideoPreview({
+            id: message.metadata.videoId,
+            title: data.title,
+            thumbnail: data.thumbnail,
+            duration: data.duration,
+            views: data.viewCount,
+            channelTitle: data.channelTitle
+          });
+        } catch (error) {
+          console.error('Error fetching video:', error);
+        } finally {
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      // Fallback to URL parsing
       const videoId = extractYouTubeVideoId(message.content);
+      console.log("Extracted videoId from content:", videoId);
       
       if (videoId) {
         setIsLoading(true);
@@ -60,7 +103,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
     };
 
     fetchVideoPreview();
-  }, [message.content]);
+  }, [message.content, message.metadata]);
 
   const getInitials = (name: string | null) => {
     if (!name) return "?";

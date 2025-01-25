@@ -29,6 +29,13 @@ export function WatchActions({ videoId, isPremium = false }: WatchActionsProps) 
 
   const handleWatchLater = async () => {
     try {
+      // Get the base URL of your website for copying
+      const baseUrl = window.location.origin;
+      const videoUrl = `${baseUrl}/watch/${videoId}`;
+      
+      await navigator.clipboard.writeText(videoUrl);
+      toast.success("Video URL copied to clipboard");
+      
       const response = await fetch("/api/youtube/watch-later", {
         method: isInWatchLater ? "DELETE" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -80,4 +87,4 @@ export function WatchActions({ videoId, isPremium = false }: WatchActionsProps) 
       )}
     </div>
   );
-} 
+}

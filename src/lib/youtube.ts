@@ -65,25 +65,28 @@ export async function getYoutubeClient() {
   return google.youtube({ version: 'v3', auth: oauth2Client });
 }
 
-export async function getVideoDetails(videoId: string) {
-  const youtube = await getYoutubeClient();
-  const response = await youtube.videos.list({
-    id: [videoId],
-    part: ['snippet', 'statistics'],
-  });
+interface OEmbedResponse {
+  title: string;
+  author_name: string;
+  author_url: string;
+  thumbnail_url: string;
+  html: string;
+}
 
-  const video = response.data.items?.[0];
-  if (!video) throw new Error('Video not found');
+export async function getVideoDetails(videoId: string) {
+  const response = await fetch(
+    `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
+  );
+  
+  if (!response.ok) throw new Error('Video not found');
+  const data: OEmbedResponse = await response.json();
 
   return {
-    title: video.snippet?.title,
-    description: video.snippet?.description,
-    channelTitle: video.snippet?.channelTitle,
-    channelImage: `https://youtube.com/avatar/${video.snippet?.channelId}`,
-    publishedAt: video.snippet?.publishedAt,
-    viewCount: video.statistics?.viewCount,
-    likeCount: video.statistics?.likeCount,
-    commentCount: video.statistics?.commentCount,
+    title: data.title,
+    channelTitle: data.author_name,
+    channelUrl: data.author_url,
+    thumbnail: data.thumbnail_url,
+    embedHtml: data.html,
   };
 }
 
@@ -101,24 +104,92 @@ interface YouTubeVideo {
 }
 
 export async function getYouTubeVideos(query?: string): Promise<YouTubeVideo[]> {
-  const youtube = await getYoutubeClient();
-  const response = await youtube.search.list({
-    q: query || '',
-    part: ['snippet'],
-    maxResults: 24,
-    type: ['video'],
-  });
+  try {
+    // For trending videos (when no query)
+    const baseUrl = query 
+      ? `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`
+      : 'https://www.youtube.com/feed/trending';
 
-  return response.data.items?.map((item) => ({
-    id: item.id?.videoId ?? '',
-    title: item.snippet?.title ?? 'Untitled',
-    thumbnail: {
-      url: item.snippet?.thumbnails?.high?.url ?? '',
-      width: item.snippet?.thumbnails?.high?.width ?? 1280,
-      height: item.snippet?.thumbnails?.high?.height ?? 720
-    },
-    channelTitle: item.snippet?.channelTitle ?? 'Unknown Channel',
-    publishedAt: item.snippet?.publishedAt ?? new Date().toISOString(),
-    viewCount: '0'
-  })) || [];
+    const response = await fetch(baseUrl);
+    const html = await response.text();
+
+    // Extract video IDs using a more reliable regex pattern
+    const videoMatches = html.match(/"videoId":"([^"]*)"/g) || [];
+    const videoIds = Array.from(new Set(
+      videoMatches
+        .map(match => match.split('"')[3])
+        .filter(Boolean)
+    )).slice(0, 24);
+
+    console.log('Found video IDs:', videoIds); // Debug log
+
+    // Fetch details for each video using oEmbed
+    const videos = await Promise.all(
+      videoIds.map(async (id) => {
+        try {
+          const embedResponse = await fetch(
+            `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`
+          );
+          
+          if (!embedResponse.ok) throw new Error(`Failed to fetch video ${id}`);
+          
+          const data = await embedResponse.json();
+          return {
+            id,
+            title: data.title,
+            thumbnail: {
+              url: data.thumbnail_url,
+              width: 1280,
+              height: 720
+            },
+            channelTitle: data.author_name,
+            publishedAt: new Date().toISOString(),
+            viewCount: 'N/A'
+          };
+        } catch (error) {
+          console.error(`Error fetching video ${id}:`, error);
+          return null;
+        }
+      })
+    );
+
+    return videos.filter(Boolean) as YouTubeVideo[];
+  } catch (error) {
+    console.error('Error in getYouTubeVideos:', error);
+    return [];
+  }
+}
+
+const OEMBED_ENDPOINT = "https://www.youtube.com/oembed";
+const YOUTUBE_API_ENDPOINT = "https://www.youtube.com";
+
+export async function getVideoData(videoId: string) {
+  const response = await fetch(
+    `${OEMBED_ENDPOINT}?url=https://www.youtube.com/watch?v=${videoId}&format=json`
+  );
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch video data');
+  }
+
+  const data = await response.json();
+  return {
+    title: data.title,
+    author_name: data.author_name,
+    author_url: data.author_url,
+    thumbnail_url: data.thumbnail_url,
+    html: data.html,
+  };
+}
+
+export async function getChannelData(channelId: string) {
+  const response = await fetch(
+    `${OEMBED_ENDPOINT}?url=https://www.youtube.com/channel/${channelId}&format=json`
+  );
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch channel data');
+  }
+
+  return await response.json();
 } 

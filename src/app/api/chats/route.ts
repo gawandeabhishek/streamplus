@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { db } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
                 id: true,
                 name: true,
                 image: true,
-                email: true,
+                email: true
               }
             }
           }
@@ -35,11 +35,6 @@ export async function GET(req: Request) {
           take: 1,
           orderBy: {
             createdAt: 'desc'
-          },
-          select: {
-            content: true,
-            createdAt: true,
-            senderId: true
           }
         }
       },
@@ -48,28 +43,7 @@ export async function GET(req: Request) {
       }
     });
 
-    const formattedChats = chats.map(chat => {
-      const otherParticipant = chat.participants.find(
-        p => p.user.id !== session.user.id
-      );
-
-      return {
-        id: chat.id,
-        name: chat.isGroup ? chat.name : otherParticipant?.user.name,
-        image: chat.isGroup ? null : otherParticipant?.user.image,
-        lastMessage: chat.messages[0],
-        isGroup: chat.isGroup,
-        participants: chat.participants.map(p => ({
-          id: p.user.id,
-          name: p.user.name,
-          image: p.user.image,
-          email: p.user.email,
-          isAdmin: p.isAdmin
-        }))
-      };
-    });
-
-    return NextResponse.json(formattedChats);
+    return NextResponse.json(chats);
   } catch (error) {
     console.error("[CHATS_GET]", error);
     return new NextResponse("Internal Error", { status: 500 });

@@ -13,7 +13,13 @@ interface FriendRequest {
   id: string;
   userId: string;
   friendId: string;
-  user: {
+  sender: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    image: string | null;
+  };
+  receiver: {
     id: string;
     name: string | null;
     email: string | null;
@@ -119,19 +125,19 @@ export function FriendRequests() {
     <div className="space-y-4">
       {requests.map((request) => {
         const isOutgoingRequest = request.userId === session?.user?.id;
-        console.log('Request:', request.id, 'isOutgoing:', isOutgoingRequest);
+        const otherUser = isOutgoingRequest ? request.receiver : request.sender;
 
         return (
           <Card key={request.id}>
             <CardContent className="flex items-center justify-between p-6">
               <div className="flex items-center gap-4">
                 <Avatar>
-                  <AvatarImage src={request.user.image || undefined} />
-                  <AvatarFallback>{request.user.name?.charAt(0) || '?'}</AvatarFallback>
+                  <AvatarImage src={otherUser.image || undefined} />
+                  <AvatarFallback>{otherUser.name?.charAt(0) || '?'}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-semibold">{request.user.name}</p>
-                  <p className="text-sm text-muted-foreground">{request.user.email}</p>
+                  <p className="font-semibold">{otherUser.name}</p>
+                  <p className="text-sm text-muted-foreground">{otherUser.email}</p>
                 </div>
               </div>
               <div className="flex gap-2">

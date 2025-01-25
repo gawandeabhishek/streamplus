@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { motion } from "framer-motion";
 
 interface MessageProps {
@@ -14,6 +14,9 @@ interface MessageProps {
 }
 
 export function Message({ content, isOwn, sender, timestamp }: MessageProps) {
+  // Parse the ISO string timestamp with fallback
+  const date = timestamp ? parseISO(timestamp) : new Date();
+
   return (
     <div className={cn(
       "flex gap-3",
@@ -42,7 +45,7 @@ export function Message({ content, isOwn, sender, timestamp }: MessageProps) {
             <p className="break-words text-sm">{content}</p>
           </div>
           <span className="text-[10px] text-muted-foreground px-2">
-            {format(new Date(timestamp), 'HH:mm')}
+            {format(date, 'HH:mm')}
           </span>
         </div>
       </div>

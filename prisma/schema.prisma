@@ -46,23 +46,24 @@ model Session {
 }
 
 model User {
-  id                 String            @id @default(cuid())
-  name               String?
-  email              String?           @unique
-  emailVerified      DateTime?
-  image              String?
-  password           String?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  subscriptionStatus SubscriptionStatus @default(FREE)
-  stripeCustomerId   String?           @unique
-  accounts           Account[]
-  sessions           Session[]
-  participants       Participant[]
-  messages           Message[]         @relation("SentMessages")
-  activities         Activity[]
-  sentFriendRequests Friend[] @relation("SentFriendRequests")
-  receivedFriendRequests Friend[] @relation("ReceivedFriendRequests")
+  id                     String              @id @default(cuid())
+  name                   String?
+  email                  String?             @unique
+  emailVerified          DateTime?
+  image                  String?
+  password               String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  subscriptionStatus     SubscriptionStatus  @default(FREE)
+  stripeCustomerId       String?             @unique
+  accounts               Account[]
+  sessions               Session[]
+  chatParticipations     Participant[]
+  messages               Message[]           @relation("SentMessages")
+  activities             Activity[]
+  sentFriendRequests     Friend[]            @relation("SentFriendRequests")
+  receivedFriendRequests Friend[]            @relation("ReceivedFriendRequests")
+  streamParticipations   StreamParticipant[]
 }
 
 model VerificationToken {
@@ -79,7 +80,7 @@ model Activity {
   videoId   String
   title     String
   thumbnail String
-  type      String   // WATCHED, LIKED, etc.
+  type      String // WATCHED, LIKED, etc.
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -93,37 +94,38 @@ model Friend {
   status    String   @default("pending")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  user      User     @relation("SentFriendRequests", fields: [userId], references: [id], onDelete: Cascade)
-  friend    User     @relation("ReceivedFriendRequests", fields: [friendId], references: [id], onDelete: Cascade)
+  sender    User     @relation("SentFriendRequests", fields: [userId], references: [id], onDelete: Cascade)
+  receiver  User     @relation("ReceivedFriendRequests", fields: [friendId], references: [id], onDelete: Cascade)
 
   @@unique([userId, friendId])
+  @@index([userId])
+  @@index([friendId])
 }
 
 model Message {
   id        String   @id @default(cuid())
   content   String
-  createdAt DateTime @default(now())
+  metadata  Json?
   senderId  String
   chatId    String
-  
-  sender    User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id])
   chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
   @@index([chatId])
   @@index([senderId])
-  @@index([createdAt])
+  @@map("messages")
 }
 
 model Chat {
   id           String        @id @default(cuid())
+  name         String?
+  isGroup      Boolean       @default(false)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
-  name         String?       // For group chats
-  isGroup      Boolean       @default(false)
   messages     Message[]
   participants Participant[]
-
-  @@index([updatedAt])
 }
 
 model Participant {
@@ -131,13 +133,31 @@ model Participant {
   userId    String
   chatId    String
   isAdmin   Boolean  @default(false)
-  isMuted   Boolean  @default(false)
   createdAt DateTime @default(now())
-
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
   @@unique([userId, chatId])
   @@index([userId])
   @@index([chatId])
-} 
+}
+
+model Stream {
+  id           String              @id @default(cuid())
+  videoId      String
+  isLive       Boolean             @default(true)
+  startedAt    DateTime            @default(now())
+  participants StreamParticipant[]
+
+  @@map("streams")
+}
+
+model StreamParticipant {
+  id       String @id @default(cuid())
+  userId   String
+  streamId String
+  stream   Stream @relation(fields: [streamId], references: [id])
+  user     User   @relation(fields: [userId], references: [id])
+
+  @@map("stream_participants")
+}

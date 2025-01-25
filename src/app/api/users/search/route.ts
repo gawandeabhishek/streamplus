@@ -19,36 +19,29 @@ export async function GET(req: Request) {
 
     const users = await db.user.findMany({
       where: {
-        OR: [
+        AND: [
           {
-            name: {
-              contains: query,
-              mode: "insensitive"
-            }
+            OR: [
+              { name: { contains: query, mode: 'insensitive' } },
+              { email: { contains: query, mode: 'insensitive' } },
+            ],
           },
           {
-            email: {
-              contains: query,
-              mode: "insensitive"
-            }
-          }
+            id: { not: session.user.id }, // Exclude current user
+          },
         ],
-        NOT: {
-          id: session.user.id
-        }
       },
       select: {
         id: true,
         name: true,
         email: true,
-        image: true
+        image: true,
       },
-      take: 10
+      take: 5,
     });
 
     return NextResponse.json(users);
   } catch (error) {
-    console.error("[USERS_SEARCH]", error);
     return new NextResponse("Internal Error", { status: 500 });
   }
 } 

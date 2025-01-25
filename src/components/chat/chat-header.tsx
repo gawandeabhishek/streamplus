@@ -2,98 +2,127 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
-import { motion } from "framer-motion";
+import { ChevronLeft, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useEffect } from "react";
 
 interface ChatHeaderProps {
-  otherUser: {
+  otherUser?: {
     id: string;
     name: string | null;
     image: string | null;
+  } | null;
+  groupInfo?: {
+    name: string;
+    participants: {
+      userId: string;
+      user: {
+        id: string;
+        name: string | null;
+        image: string | null;
+      };
+    }[];
   };
-  onlineUsers: { user_id: string; email: string; }[];
+  onlineUsers: string[];
   onToggleSidebar: () => void;
-  onBack?: () => void;
-  isSidebarOpen?: boolean;
-  isLoading?: boolean;
+  onBack: () => void;
+  isSidebarOpen: boolean;
+  isLoading: boolean;
 }
 
-export function ChatHeader({ 
-  otherUser, 
-  onlineUsers, 
-  onToggleSidebar, 
+export function ChatHeader({
+  otherUser,
+  groupInfo,
+  onlineUsers,
+  onToggleSidebar,
   onBack,
-  isSidebarOpen = true,
-  isLoading = false
+  isSidebarOpen,
+  isLoading
 }: ChatHeaderProps) {
-  const [isMobile, setIsMobile] = useState(false);
-  const isOnline = onlineUsers?.some(user => user.user_id === otherUser?.id);
-
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+    if (groupInfo) {
+      console.log('Full participants data:', groupInfo.participants);
+      console.log('Online users:', onlineUsers);
+    }
+  }, [groupInfo, onlineUsers]);
 
   if (isLoading) {
     return (
-      <div className="sticky top-0 z-10">
-        <div className={cn(
-          "h-16 px-4 flex items-center gap-3",
-          "backdrop-blur-md bg-background/80 border-b",
-          "supports-[backdrop-filter]:bg-background/60"
-        )}>
-          <Skeleton className="h-10 w-10 rounded-full" />
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-[100px]" />
-            <Skeleton className="h-3 w-[60px]" />
+      <header className="sticky top-0 z-10 bg-background border-b p-4">
+        <div className="flex items-center gap-4">
+          <div className="md:hidden">
+            <Skeleton className="h-10 w-10" />
+          </div>
+          <Skeleton className="h-10 w-10" />
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-4 w-24" />
           </div>
         </div>
-      </div>
+      </header>
     );
   }
 
   return (
-    <div className="sticky top-0 z-10">
-      <motion.div 
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className={cn(
-          "h-16 px-4 flex items-center gap-3",
-          "backdrop-blur-md bg-background/80 border-b",
-          "supports-[backdrop-filter]:bg-background/60"
-        )}
-      >
-        <Button variant="ghost" size="icon" onClick={onToggleSidebar}>
-          {isMobile ? (
-            <ArrowLeft className="h-5 w-5" />
-          ) : (
-            isSidebarOpen ? (
-              <ChevronLeft className="h-5 w-5" />
-            ) : (
-              <ChevronRight className="h-5 w-5" />
-            )
-          )}
-        </Button>
-        <Avatar>
-          <AvatarImage src={otherUser.image || undefined} />
-          <AvatarFallback>
-            {otherUser.name?.[0]?.toUpperCase() || '?'}
-          </AvatarFallback>
-        </Avatar>
-        <div>
-          <p className="font-medium">{otherUser.name || 'Unknown User'}</p>
-          {isOnline && (
-            <p className="text-sm text-emerald-500 font-medium">
-              Online
-            </p>
-          )}
+    <header className="sticky top-0 z-10 bg-background border-b p-4">
+      <div className="flex items-center gap-4">
+        <div className="md:hidden">
+          <Button variant="ghost" size="icon" onClick={onBack}>
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
         </div>
-      </motion.div>
-    </div>
+        
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="hidden md:inline-flex"
+          onClick={onToggleSidebar}
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+
+        {groupInfo ? (
+          <div className="flex items-center gap-3">
+            <Avatar className="h-8 w-8">
+              <AvatarFallback>
+                {groupInfo.name[0]?.toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="font-medium">{groupInfo.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {groupInfo.participants.filter(p => onlineUsers.includes(p.id)).length > 0 && (
+                  <span className="text-emerald-500">
+                    {groupInfo.participants.filter(p => onlineUsers.includes(p.id)).length} online
+                  </span>
+                )}
+                <span className="text-muted-foreground">
+                  {groupInfo.participants.filter(p => onlineUsers.includes(p.id)).length > 0 && ' • '}
+                  {groupInfo.participants.length} members
+                </span>
+              </p>
+            </div>
+          </div>
+        ) : otherUser && (
+          <div className="flex items-center gap-3">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={otherUser.image || undefined} />
+              <AvatarFallback>
+                {otherUser.name?.[0]?.toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="font-medium">{otherUser.name}</p>
+              {onlineUsers.includes(otherUser.id) && (
+                <p className="text-xs">
+                  <span className="text-emerald-500">online</span>
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </header>
   );
 } 
